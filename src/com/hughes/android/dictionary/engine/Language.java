@@ -206,10 +206,10 @@ public class Language {
 
     }
 
-    private static final Map<String, Language> registry = new LinkedHashMap<String, Language>();
+    public static final Map<String, Language> registry = new LinkedHashMap<String, Language>();
 
     final String isoCode;
-    final Locale locale;
+    public final Locale locale;
 
     private Collator collator;
 
