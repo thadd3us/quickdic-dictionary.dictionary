@@ -14,20 +14,56 @@
 
 package com.hughes.android.dictionary.engine2;
 
-import java.io.InputStream;
-import java.io.OutputStream;
+import com.hughes.util.raf.Serializer;
+
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 
 public abstract class AbstractEntry {
-
     final EntrySource entrySource;
 
+    abstract Subtype getSubtype();
+    
     protected AbstractEntry(EntrySource entrySource) {
         this.entrySource = entrySource;
     }
 
-    static AbstractEntry read(final InputStream inputStream) {
-        return null;
-    }
+    abstract void writeChild(final DataOutputStream out) throws IOException;
+    
+    static class EntrySerializer implements Serializer<AbstractEntry> {
+        
+        final Dictionary dictionary;
+        
+        EntrySerializer(Dictionary dictionary) {
+            this.dictionary = dictionary;
+        }
 
-    abstract void write(final OutputStream outputStream);
+        @Override
+        public void write(DataOutputStream out, AbstractEntry t) throws IOException {
+            out.writeShort(t.entrySource.index());
+            out.writeShort(t.getSubtype().ordinal());
+            t.writeChild(out);
+        }
+
+        @Override
+        public AbstractEntry read(DataInputStream in) throws IOException {
+            final short entrySouceIndex = in.readShort();
+            final EntrySource entrySource = dictionary.sources.get(entrySouceIndex);
+            final short subtypeIndex = in.readShort();
+            return Subtype.values()[subtypeIndex].create(dictionary, entrySource, in);
+        }
+        
+    };
+    
+    enum Subtype {
+        PAIR {
+            @Override
+            public AbstractEntry create(Dictionary dictionary, EntrySource entrySource, DataInputStream in) throws IOException {
+                return new PairEntry(entrySource, in);
+            }
+        };
+        
+        public abstract AbstractEntry create(Dictionary dictionary, EntrySource entrySource, DataInputStream in) throws IOException;
+    };
 }

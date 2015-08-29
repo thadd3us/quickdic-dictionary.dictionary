@@ -12,18 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package com.hughes.android.dictionary.engine;
+package com.hughes.android.dictionary.engine2;
 
 import com.hughes.android.dictionary.R;
 
+import java.io.CharArrayWriter;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetEncoder;
+import java.nio.charset.CoderResult;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 public class Language {
+    
+    public static final Charset UTF8 = Charset.forName("UTF8");
 
     public static final class LanguageResources {
         public final String englishName;
@@ -202,7 +209,7 @@ public class Language {
 
     public static final Map<String, Language> registry = new LinkedHashMap<String, Language>();
 
-    private static final Locale defaultLocale = Locale.ENGLISH;
+//    private static final Locale defaultLocale = Locale.ENGLISH;
 
     final String isoCode;
     private final Locale locale;
@@ -222,38 +229,38 @@ public class Language {
         return isoCode;
     }
     
-    String normalizeText(String text) {
+    public String normalizeText(String text) {
         text = text.toLowerCase(locale);
         return text;
     }
     
-    List<String> tokenizeText(String text) {
+    public List<String> tokenizeText(String text) {
         List<String> result = new ArrayList<String>();
         
         return result;
     }
 
-    /**
-     * A practical pattern to identify strong RTL characters. This pattern is
-     * not completely correct according to the Unicode standard. It is
-     * simplified for performance and small code size.
-     */
-    private static final String rtlChars =
-            "\u0591-\u07FF\uFB1D-\uFDFD\uFE70-\uFEFC";
-
-    private static final String puncChars =
-            "\\[\\]\\(\\)\\{\\}\\=";
-
-    private static final Pattern RTL_LEFT_BOUNDARY = Pattern.compile("([" + puncChars + "])(["
-            + rtlChars + "])");
-    private static final Pattern RTL_RIGHT_BOUNDARY = Pattern.compile("([" + rtlChars + "])(["
-            + puncChars + "])");
-
-    public static String fixBidiText(String text) {
-        // text = RTL_LEFT_BOUNDARY.matcher(text).replaceAll("$1\u200e $2");
-        // text = RTL_RIGHT_BOUNDARY.matcher(text).replaceAll("$1 \u200e$2");
-        return text;
-    }
+//    /**
+//     * A practical pattern to identify strong RTL characters. This pattern is
+//     * not completely correct according to the Unicode standard. It is
+//     * simplified for performance and small code size.
+//     */
+//    private static final String rtlChars =
+//            "\u0591-\u07FF\uFB1D-\uFDFD\uFE70-\uFEFC";
+//
+//    private static final String puncChars =
+//            "\\[\\]\\(\\)\\{\\}\\=";
+//
+//    private static final Pattern RTL_LEFT_BOUNDARY = Pattern.compile("([" + puncChars + "])(["
+//            + rtlChars + "])");
+//    private static final Pattern RTL_RIGHT_BOUNDARY = Pattern.compile("([" + rtlChars + "])(["
+//            + puncChars + "])");
+//
+//    public static String fixBidiText(String text) {
+//        // text = RTL_LEFT_BOUNDARY.matcher(text).replaceAll("$1\u200e $2");
+//        // text = RTL_RIGHT_BOUNDARY.matcher(text).replaceAll("$1 \u200e$2");
+//        return text;
+//    }
 
     // ----------------------------------------------------------------
 
@@ -264,14 +271,18 @@ public class Language {
     public static final Language de = new Language(Locale.GERMAN, "DE") {
         @Override
         public String normalizeText(String text) {
-            
+            text = text.replaceAll("ae", "ä");
+            text = text.replaceAll("oe", "ö");
+            text = text.replaceAll("ue", "ü");
+            text = text.replaceAll("ß", "ss");
+            return text;
         }
     };
 
     // ----------------------------------------------------------------
 
     public static synchronized Language lookup(final String isoCode) {
-        Language lang = registry.get(isoCode.toLowerCase());
+        Language lang = registry.get(isoCode);
         if (lang == null) {
             lang = new Language(new Locale(isoCode), isoCode);
         }

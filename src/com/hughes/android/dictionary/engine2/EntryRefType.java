@@ -12,9 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package com.hughes.android.dictionary.engine;
+package com.hughes.android.dictionary.engine2;
 
-public enum EntryTypeName {
+/**
+ * Describes the relationship between an Entry and and EntryRef (which is
+ * filed under a particular token).  It's basically a summary of how the
+ * referenced entry mentions the token.  Is it in the title of the Entry,
+ * or just mentioned in the text?
+ *
+ */
+public enum EntryRefType {
     WIKTIONARY_TITLE_SINGLE_DETAIL(true, true, null),
     WIKTIONARY_TITLE_SINGLE(true, true, null),
     WIKTIONARY_INFLECTD_FORM_SINGLE(false, true, null),
@@ -67,14 +74,14 @@ public enum EntryTypeName {
 
     final boolean mainWord;
     final boolean overridesStopList;
-    final EntryTypeName singleWordInstance;
+    final EntryRefType singleWordInstance;
 
-    private EntryTypeName() {
+    private EntryRefType() {
         this(false, false, null);
     }
 
-    private EntryTypeName(final boolean mainWord, final boolean overridesStopList,
-            final EntryTypeName singleWordInstance) {
+    private EntryRefType(final boolean mainWord, final boolean overridesStopList,
+            final EntryRefType singleWordInstance) {
         this.mainWord = mainWord;
         this.overridesStopList = overridesStopList;
         this.singleWordInstance = singleWordInstance == null ? this : singleWordInstance;

@@ -14,15 +14,16 @@
 
 package com.hughes.android.dictionary.engine2;
 
+import com.hughes.android.dictionary.engine.RowMatchType;
+
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.PrintStream;
-import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
-public class PairEntry extends AbstractEntry implements RAFSerializable<PairEntry>,
-        Comparable<PairEntry> {
+public class PairEntry extends AbstractEntry {
 
     public final List<Pair> pairs;
 
@@ -36,135 +37,52 @@ public class PairEntry extends AbstractEntry implements RAFSerializable<PairEntr
         this.pairs.add(new Pair(lang1, lang2));
     }
 
-    public PairEntry(final Dictionary dictionary, final RandomAccessFile raf, final int index)
+    public PairEntry(final EntrySource entrySource, final DataInputStream in)
             throws IOException {
-        super(dictionary, raf, index);
-        final int size = raf.readInt();
+        super(entrySource);
+        final int size = in.readInt();
         pairs = new ArrayList<PairEntry.Pair>(size);
         for (int i = 0; i < size; ++i) {
-            pairs.add(new Pair(raf.readUTF(), raf.readUTF()));
+            final String lang1 = in.readUTF();
+            final String lang2 = in.readUTF();
+            pairs.add(new Pair(lang1, lang2));
         }
     }
-
+    
     @Override
-    public void write(RandomAccessFile raf) throws IOException {
-        super.write(raf);
-        // TODO: this could be a short.
-        raf.writeInt(pairs.size());
+    void writeChild(DataOutputStream out) throws IOException {
+        out.writeInt(pairs.size());
         for (int i = 0; i < pairs.size(); ++i) {
             assert pairs.get(i).lang1.length() > 0;
-            raf.writeUTF(pairs.get(i).lang1);
-            raf.writeUTF(pairs.get(i).lang2);
+            out.writeUTF(pairs.get(i).lang1);
+            out.writeUTF(pairs.get(i).lang2);
         }
     }
 
-    static final class Serializer implements RAFListSerializer<PairEntry> {
-
-        final Dictionary dictionary;
-
-        Serializer(Dictionary dictionary) {
-            this.dictionary = dictionary;
+    public RowMatchType matches(final List<String> searchTokens,
+            final Pattern orderedMatchPattern,
+            final boolean swapPairEntries) {
+        final int side = swapPairEntries ? 1 : 0;
+        final String[] pairSides = new String[pairs.size()];
+        for (int i = 0; i < pairs.size(); ++i) {
+            pairSides[i] = pairs.get(i).get(side).toLowerCase();
         }
-
-        @Override
-        public PairEntry read(RandomAccessFile raf, int index) throws IOException {
-            return new PairEntry(dictionary, raf, index);
-        }
-
-        @Override
-        public void write(RandomAccessFile raf, PairEntry t) throws IOException {
-            t.write(raf);
-        }
-    };
-
-    @Override
-    public void addToDictionary(final Dictionary dictionary) {
-        assert index == -1;
-        dictionary.pairEntries.add(this);
-        index = dictionary.pairEntries.size() - 1;
-    }
-
-    @Override
-    public RowBase CreateRow(int rowIndex, Index dictionaryIndex) {
-        return new Row(this.index, rowIndex, dictionaryIndex);
-    }
-
-    // --------------------------------------------------------------------
-
-    public static class Row extends RowBase {
-
-        Row(final RandomAccessFile raf, final int thisRowIndex,
-                final Index index) throws IOException {
-            super(raf, thisRowIndex, index);
-        }
-
-        Row(final int referenceIndex, final int thisRowIndex,
-                final Index index) {
-            super(referenceIndex, thisRowIndex, index);
-        }
-
-        @Override
-        public String toString() {
-            return getRawText(false);
-        }
-
-        public PairEntry getEntry() {
-            return index.dict.pairEntries.get(referenceIndex);
-        }
-
-        @Override
-        public void print(PrintStream out) {
-            final PairEntry pairEntry = getEntry();
-            for (int i = 0; i < pairEntry.pairs.size(); ++i) {
-                out.print((i == 0 ? "  " : "    ") + pairEntry.pairs.get(i));
-                out.println();
-            }
-        }
-
-        @Override
-        public String getRawText(boolean compact) {
-            final PairEntry pairEntry = getEntry();
-            return pairEntry.getRawText(compact);
-        }
-
-        @Override
-        public RowMatchType matches(final List<String> searchTokens,
-                final Pattern orderedMatchPattern, final Transliterator normalizer,
-                final boolean swapPairEntries) {
-            final int side = swapPairEntries ? 1 : 0;
-            final List<Pair> pairs = getEntry().pairs;
-            final String[] pairSides = new String[pairs.size()];
-            for (int i = 0; i < pairs.size(); ++i) {
-                pairSides[i] = normalizer.transform(pairs.get(i).get(side));
-            }
-            for (int i = searchTokens.size() - 1; i >= 0; --i) {
-                final String searchToken = searchTokens.get(i);
-                boolean found = false;
-                for (final String pairSide : pairSides) {
-                    found |= pairSide.contains(searchToken);
-                }
-                if (!found) {
-                    return RowMatchType.NO_MATCH;
-                }
-            }
+        for (int i = searchTokens.size() - 1; i >= 0; --i) {
+            final String searchToken = searchTokens.get(i);
+            boolean found = false;
             for (final String pairSide : pairSides) {
-                if (orderedMatchPattern.matcher(pairSide).find()) {
-                    return RowMatchType.ORDERED_MATCH;
-                }
+                found |= pairSide.contains(searchToken);
             }
-            return RowMatchType.BAG_OF_WORDS_MATCH;
-        }
-
-        @Override
-        public int getSideLength(boolean swapPairEntries) {
-            int result = 0;
-            final int side = swapPairEntries ? 1 : 0;
-            for (final Pair pair : getEntry().pairs) {
-                result += pair.get(side).length();
+            if (!found) {
+                return RowMatchType.NO_MATCH;
             }
-            return result;
         }
-
+        for (final String pairSide : pairSides) {
+            if (orderedMatchPattern.matcher(pairSide).find()) {
+                return RowMatchType.ORDERED_MATCH;
+            }
+        }
+        return RowMatchType.BAG_OF_WORDS_MATCH;
     }
 
     public String getRawText(final boolean compact) {
@@ -186,11 +104,6 @@ public class PairEntry extends AbstractEntry implements RAFSerializable<PairEntr
             builder.append(this.pairs.get(i).lang2);
         }
         return builder.toString();
-    }
-
-    @Override
-    public int compareTo(final PairEntry that) {
-        return this.getRawText(false).compareTo(that.getRawText(false));
     }
 
     @Override
@@ -237,4 +150,10 @@ public class PairEntry extends AbstractEntry implements RAFSerializable<PairEntr
         }
 
     }
+
+    @Override
+    Subtype getSubtype() {
+        return Subtype.PAIR;
+    }
+
 }

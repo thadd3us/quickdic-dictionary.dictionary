@@ -20,6 +20,7 @@ import com.hughes.util.CachingList;
 import com.hughes.util.raf.RAFList;
 import com.hughes.util.raf.RAFListSerializer;
 import com.hughes.util.raf.RAFSerializable;
+import com.hughes.util.raf.compressed.CompressedList;
 
 import java.io.File;
 import java.io.IOException;
@@ -29,7 +30,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class Dictionary implements RAFSerializable<Dictionary> {
+public class Dictionary {
 
     static final int CURRENT_DICT_VERSION = 7;
     static final String END_OF_DICTIONARY = "END OF DICTIONARY";
@@ -38,9 +39,7 @@ public class Dictionary implements RAFSerializable<Dictionary> {
     final int dictFileVersion;
     final long creationMillis;
     public final String dictInfo;
-    public final List<PairEntry> pairEntries;
-    public final List<TextEntry> textEntries;
-    public final List<HtmlEntry> htmlEntries;
+    public final List<AbstractEntry> entries;
     public final List<EntrySource> sources;
     public final List<Index> indices;
 
@@ -53,9 +52,7 @@ public class Dictionary implements RAFSerializable<Dictionary> {
         this.dictFileVersion = CURRENT_DICT_VERSION;
         this.creationMillis = System.currentTimeMillis();
         this.dictInfo = dictInfo;
-        pairEntries = new ArrayList<PairEntry>();
-        textEntries = new ArrayList<TextEntry>();
-        htmlEntries = new ArrayList<HtmlEntry>();
+        entries = new ArrayList<AbstractEntry>();
         sources = new ArrayList<EntrySource>();
         indices = new ArrayList<Index>();
     }
@@ -76,19 +73,9 @@ public class Dictionary implements RAFSerializable<Dictionary> {
             sources = new ArrayList<EntrySource>(rafSources);
             raf.seek(rafSources.getEndOffset());
 
-            pairEntries = CachingList.create(
-                    RAFList.create(raf, new PairEntry.Serializer(this), raf.getFilePointer()),
-                    CACHE_SIZE);
-            textEntries = CachingList.create(
-                    RAFList.create(raf, new TextEntry.Serializer(this), raf.getFilePointer()),
-                    CACHE_SIZE);
-            if (dictFileVersion >= 5) {
-                htmlEntries = CachingList.create(
-                        RAFList.create(raf, new HtmlEntry.Serializer(this), raf.getFilePointer()),
-                        CACHE_SIZE);
-            } else {
-                htmlEntries = Collections.emptyList();
-            }
+            entries = CachingList.create(
+                    CompressedList.create(raf, new AbstractEntry.EntrySerializer(this), raf.getFilePointer()),
+                    4096);
             indices = CachingList.createFullyCached(RAFList.create(raf, indexSerializer,
                     raf.getFilePointer()));
         } catch (RuntimeException e) {
@@ -102,45 +89,6 @@ public class Dictionary implements RAFSerializable<Dictionary> {
         }
     }
 
-    @Override
-    public void write(RandomAccessFile raf) throws IOException {
-        raf.writeInt(dictFileVersion);
-        raf.writeLong(creationMillis);
-        raf.writeUTF(dictInfo);
-        RAFList.write(raf, sources, new EntrySource.Serializer(this));
-        RAFList.write(raf, pairEntries, new PairEntry.Serializer(this));
-        RAFList.write(raf, textEntries, new TextEntry.Serializer(this));
-        RAFList.write(raf, htmlEntries, new HtmlEntry.Serializer(this));
-        RAFList.write(raf, indices, indexSerializer);
-        raf.writeUTF(END_OF_DICTIONARY);
-    }
-
-    private final RAFListSerializer<Index> indexSerializer = new RAFListSerializer<Index>() {
-        @Override
-        public Index read(RandomAccessFile raf, final int readIndex) throws IOException {
-            return new Index(Dictionary.this, raf);
-        }
-
-        @Override
-        public void write(RandomAccessFile raf, Index t) throws IOException {
-            t.write(raf);
-        }
-    };
-
-    final RAFListSerializer<HtmlEntry> htmlEntryIndexSerializer = new RAFListSerializer<HtmlEntry>() {
-        @Override
-        public void write(RandomAccessFile raf, HtmlEntry t) throws IOException {
-            if (t.index() == -1)
-                throw new IndexOutOfBoundsException();
-            raf.writeInt(t.index());
-        }
-
-        @Override
-        public HtmlEntry read(RandomAccessFile raf, int readIndex) throws IOException {
-            return htmlEntries.get(raf.readInt());
-        }
-    };
-
     public void print(final PrintStream out) {
         out.println("dictInfo=" + dictInfo);
         for (final EntrySource entrySource : sources) {
@@ -148,7 +96,7 @@ public class Dictionary implements RAFSerializable<Dictionary> {
         }
         out.println();
         for (final Index index : indices) {
-            out.printf("Index: %s %s\n", index.shortName, index.longName);
+            out.printf("Index: %s %s\n", index.language, index.name);
             index.print(out);
             out.println();
         }
